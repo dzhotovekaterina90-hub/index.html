@@ -10,12 +10,20 @@ type GeneratedPayload = {
   articleMarkdown: string;
 };
 
+type PublishPayload = {
+  postUrl: string;
+};
+
 export default function GeneratorPage() {
   const [keyword, setKeyword] = useState('');
   const [platform, setPlatform] = useState(platforms[0]);
   const [title, setTitle] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
   const [content, setContent] = useState('');
+  const [wordpressUrl, setWordpressUrl] = useState('');
+  const [username, setUsername] = useState('');
+  const [applicationPassword, setApplicationPassword] = useState('');
+  const [postUrl, setPostUrl] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [status, setStatus] = useState('');
@@ -29,6 +37,7 @@ export default function GeneratorPage() {
 
     setIsGenerating(true);
     setStatus('Generating content...');
+    setPostUrl('');
 
     try {
       const response = await fetch('/api/generate', {
@@ -55,18 +64,46 @@ export default function GeneratorPage() {
   };
 
   const onPublish = async () => {
-    if (!content.trim() || !title.trim() || !metaDescription.trim()) {
-      setStatus('Generate and review title, meta description, and content before publishing.');
+    if (!content.trim() || !title.trim()) {
+      setStatus('Generate and review the content before publishing.');
+      return;
+    }
+
+    if (!wordpressUrl.trim() || !username.trim() || !applicationPassword.trim()) {
+      setStatus('WordPress URL, username, and application password are required for publishing.');
       return;
     }
 
     setIsPublishing(true);
     setStatus(`Publishing to ${platform}...`);
+    setPostUrl('');
 
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    try {
+      const response = await fetch('/api/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          content,
+          wordpress_url: wordpressUrl,
+          username,
+          application_password: applicationPassword
+        })
+      });
 
-    setIsPublishing(false);
-    setStatus(`Successfully published to ${platform} (mock).`);
+      const data = (await response.json()) as PublishPayload | { error: string };
+
+      if (!response.ok || 'error' in data) {
+        throw new Error('error' in data ? data.error : 'Publishing failed.');
+      }
+
+      setPostUrl(data.postUrl);
+      setStatus(`Successfully published to ${platform}.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Publishing failed.');
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   return (
@@ -108,12 +145,7 @@ export default function GeneratorPage() {
           <button className="btn btn-primary" type="submit" disabled={isGenerating}>
             {isGenerating ? 'Generating...' : 'Generate'}
           </button>
-          <button
-            className="btn btn-secondary"
-            type="button"
-            onClick={onPublish}
-            disabled={isPublishing || !content.trim() || !title.trim() || !metaDescription.trim()}
-          >
+          <button className="btn btn-secondary" type="button" onClick={onPublish} disabled={isPublishing || !content.trim() || !title.trim()}>
             {isPublishing ? 'Publishing...' : 'Publish'}
           </button>
         </div>
@@ -152,7 +184,52 @@ export default function GeneratorPage() {
         />
       </section>
 
+      <section className="card mt-6 space-y-4">
+        <h3 className="text-lg font-semibold text-white">WordPress Publishing</h3>
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-300" htmlFor="wordpress-url">
+            WordPress URL
+          </label>
+          <input
+            id="wordpress-url"
+            className="input"
+            value={wordpressUrl}
+            onChange={(event) => setWordpressUrl(event.target.value)}
+            placeholder="https://your-site.com"
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-300" htmlFor="wordpress-username">
+            Username
+          </label>
+          <input id="wordpress-username" className="input" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="admin" />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-300" htmlFor="wordpress-app-password">
+            Application Password
+          </label>
+          <input
+            id="wordpress-app-password"
+            type="password"
+            className="input"
+            value={applicationPassword}
+            onChange={(event) => setApplicationPassword(event.target.value)}
+            placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
+          />
+        </div>
+      </section>
+
       {status ? <p className="mt-4 text-sm text-cyan-300">{status}</p> : null}
+      {postUrl ? (
+        <p className="mt-2 text-sm text-emerald-300">
+          Published successfully:{' '}
+          <a className="underline hover:text-emerald-200" href={postUrl} target="_blank" rel="noreferrer">
+            {postUrl}
+          </a>
+        </p>
+      ) : null}
     </AppShell>
   );
 }
